@@ -1,0 +1,102 @@
+﻿import csv
+
+
+class ExamException(Exception): #def classe ExamException, eredita dalla c.d.b Exception
+                                #questa classe verrà utilizzata per generare eccezioni 
+    pass                        #andiamo avanti
+
+
+class CSVTimeSeriesFile:        #def classe CSVTimeSeriesFile 
+    def __init__(self, name):
+        self.name = name
+
+
+    def get_data(self):
+        time_series = {}        #diz annidato per memorizzare i dati temporali
+        seen_dates = set() #insieme per tenere traccia dei timestamp già visti (contr pres di dupl)
+
+
+        try:
+            with open(self.name, 'r') as file: #with per l'ap/chius file perchè da meno probl con le eccez.
+                reader = csv.reader(file)  #itera tra le righe e vede se ogni riga ha due col
+                previous_date = None  # Per verificare l'ordine della serie temporale
+                for row in reader:
+                    if len(row) != 2:
+                        continue
+
+
+                    date, passengers = row  #estraz valori data,passeggeri + conv risp tipi
+                    try:
+                        date = str(date)
+                        passengers = int(passengers)
+
+
+                        # Ignora valori non numerici, vuoti, nulli o negativi
+                        if passengers <= 0:
+                            continue
+
+
+                        year, month = date.split('-')
+
+
+                        # Verifica l'ordine della serie temporale
+                        current_date = year + '-' + month
+                        if previous_date and previous_date >= current_date:
+                            raise ExamException(f'Errore, timestamp fuori ordine o duplicato: {previous_date} >= {current_date}')
+                        previous_date = current_date
+
+
+                        # Verifica duplicati
+                        if current_date in seen_dates:
+                            raise ExamException(f'Errore, timestamp fuori ordine o duplicato: {current_date}')
+                        seen_dates.add(current_date)
+                        #dati aggiunti al dizionario time_series solo se il mese è "nuovo"
+                        year_dict = time_series.setdefault(year, {})
+
+
+                        if month in year_dict:
+                            continue
+
+
+                        year_dict[month] = passengers #aggiunta chiave al dizionario
+
+
+                    except (ValueError, TypeError):
+                        continue
+
+
+        except FileNotFoundError:
+            raise ExamException('Errore, file non trovato')
+        except Exception as e:
+            raise ExamException(f'Errore nella lettura del file: {str(e)}')
+
+
+        # Controllo per un solo mese nei dati
+        if all(len(months) <= 1 for months in time_series.values()):
+            return {}
+
+
+        return time_series
+
+
+def find_min_max(time_series):  #find_min_max prende in input time_series (diz) 
+   
+    result = {}   #def nuovo dizionario vuoto result che conterrà i risultati finali
+    for year, months in time_series.items():     #itera per year e months
+        min_month = min(months, key=months.get)
+        max_month = max(months, key=months.get)
+
+
+        result[year] = {'min': [min_month], 'max': [max_month]} #inizializz diz result 
+
+
+        for month in months: #iteraz per min e max con doppioni eventualmente
+            if months[month] == months[min_month] and month != min_month:
+                result[year]['min'].append(month)
+
+
+            if months[month] == months[max_month] and month != max_month:
+                result[year]['max'].append(month)
+
+
+    return result  #La funzione ritorna il dizionario result per ogni anno
